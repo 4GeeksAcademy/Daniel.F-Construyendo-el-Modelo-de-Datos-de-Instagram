@@ -1,73 +1,61 @@
-import datetime
-from sqlalchemy import Column, ForeignKey, Integer, String, Text, DateTime
-from sqlalchemy.orm import relationship, declarative_base
-from eralchemy2 import render_er
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-Base = declarative_base()
+db = SQLAlchemy()
 
+class User(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(
+        String(120), unique=True, nullable=False)
+    username: Mapped[str] = mapped_column(
+        String(80), unique=True, nullable=False)
+    firstname: Mapped[str] = mapped_column(String(80), nullable=False)
+    lastname: Mapped[str] = mapped_column(String(80), nullable=False)
+    password: Mapped[str] = mapped_column(nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False)
+    posts: Mapped[list["Post"]] = relationship("Post")
+    comments: Mapped[list["Comment"]] = relationship("Comment")
+    following: Mapped[list["Follower"]] = relationship(
+        "Follower", foreign_keys="Follower.user_from_id")
+    followers: Mapped[list["Follower"]] = relationship(
+        "Follower",  foreign_keys="Follower.user_to_id")
+    
+    def serialize(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            # do not serialize the password, its a security breach
+        }
 
-class User(Base):
-    __tablename__ = 'user'
+class Post(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    user: Mapped["User"] = relationship("User")
+    media: Mapped[list["Media"]] = relationship("Media")
+    comments: Mapped[list["Comment"]] = relationship("Comment")
 
-    id = Column(Integer, primary_key=True)
-    username = Column(String(50), nullable=False, unique=True)
-    firstname = Column(String(50), nullable=False)
-    lastname = Column(String(50), nullable=False)
-    email = Column(String(100), nullable=False, unique=True)
-    password = Column(String(100), nullable=False)
-    biography = Column(Text)
+class Media(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(255), nullable=False)
+    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
+    post: Mapped["Post"] = relationship("Post")
 
-    posts = relationship('Post', backref='user')
-    comments = relationship('Comment', backref='user')
-    likes = relationship('Like', backref='user')
+class Comment(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    comment_text: Mapped[str] = mapped_column(String(255), nullable=False)
+    author_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False)
+    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
+    author: Mapped["User"] = relationship("User")
+    post: Mapped["Post"] = relationship("Post")
 
-
-class Post(Base):
-    __tablename__ = 'post'
-
-    id = Column(Integer, primary_key=True)
-    image_url = Column(String(250), nullable=False)
-    caption = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-
-    comments = relationship('Comment', backref='post')
-    likes = relationship('Like', backref='post')
-
-
-class Comment(Base):
-    __tablename__ = 'comment'
-
-    id = Column(Integer, primary_key=True)
-    comment_text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    post_id = Column(Integer, ForeignKey('post.id'), nullable=False)
-
-
-class Like(Base):
-    __tablename__ = 'like'
-
-    id = Column(Integer, primary_key=True)
-
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    post_id = Column(Integer, ForeignKey('post.id'), nullable=False)
-
-
-class Follower(Base):
-    __tablename__ = 'follower'
-
-    id = Column(Integer, primary_key=True)
-
-    user_from_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    user_to_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-
-
-try:
-    render_er(Base, 'diagram.png')
-    print("¡Éxito! El archivo diagram.png ha sido actualizado.")
-except Exception as e:
-    print("Hubo un problema generando el diagrama")
-    raise e
+class Follower(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_from_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False)
+    user_to_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False)
+    user_from: Mapped["User"] = relationship(
+        "User", foreign_keys=[user_from_id])
+    user_to: Mapped["User"] = relationship("User", foreign_keys=[user_to_id])
